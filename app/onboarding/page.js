@@ -8,7 +8,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(0)
   const [goal, setGoal] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('')
-  const [learningStyle, setLearningStyle] = useState('')
+  const [learningStyle, setLearningStyle] = useState([])
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -29,7 +29,7 @@ export default function Onboarding() {
       onboarding_completed: true,
       goal,
       experience_level: experienceLevel || null,
-      learning_style: learningStyle || null,
+      learning_style: learningStyle.length > 0 ? learningStyle.join(', ') : null,
     })
     router.push('/dashboard')
   }
@@ -129,13 +129,13 @@ export default function Onboarding() {
       </div>
     </div>,
 
-    // Step 3 - Learning Style (skippable)
+    // Step 3 - Learning Style (skippable, multi-select)
     <div key={3} className="text-center max-w-lg mx-auto">
       <div className="text-5xl mb-4">🧠</div>
       <div className="bg-gray-900 border border-gray-700 rounded-lg p-4 mb-6 text-left">
         <p className="text-green-400 font-bold text-sm tracking-widest mb-1">MISTER CASH</p>
         <p className="text-white leading-relaxed">
-          Last one — how do you learn best? This helps me assign you the right kind of tasks.
+          Last one — how do you learn best? Select as many as apply. This helps me assign you the right kind of tasks.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-3 mb-6">
@@ -148,27 +148,33 @@ export default function Onboarding() {
         ].map(style => (
           <button
             key={style}
-            onClick={() => setLearningStyle(style)}
+            onClick={() =>
+              setLearningStyle(prev =>
+                prev.includes(style)
+                  ? prev.filter(s => s !== style)
+                  : [...prev, style]
+              )
+            }
             className={`px-4 py-3 border text-sm tracking-wide transition-all text-left ${
-              learningStyle === style
+              learningStyle.includes(style)
                 ? 'border-green-400 bg-green-400 text-black font-bold'
                 : 'border-gray-700 text-gray-400 hover:border-gray-500'
             }`}
           >
-            {style}
+            {learningStyle.includes(style) ? '✓ ' : ''}{style}
           </button>
         ))}
       </div>
       <div className="flex gap-4 justify-center">
         <button
-          onClick={() => { setLearningStyle(''); finishOnboarding() }}
+          onClick={() => { setLearningStyle([]); finishOnboarding() }}
           className="border border-gray-700 text-gray-500 px-6 py-3 text-sm tracking-widest hover:border-gray-500 transition-all"
         >
           DON'T ANSWER
         </button>
         <button
-          onClick={() => { if (learningStyle) finishOnboarding() }}
-          disabled={!learningStyle || loading}
+          onClick={() => { if (learningStyle.length > 0) finishOnboarding() }}
+          disabled={learningStyle.length === 0 || loading}
           className="bg-green-400 text-black font-bold px-8 py-3 tracking-widest hover:bg-green-300 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
         >
           {loading ? 'LOADING...' : 'FINISH →'}
@@ -182,7 +188,6 @@ export default function Onboarding() {
     <main className="min-h-screen bg-black flex items-center justify-center p-8">
       <div className="w-full max-w-2xl">
 
-        {/* Progress dots */}
         {step > 0 && (
           <div className="flex justify-center gap-2 mb-12">
             {[1, 2, 3].map(i => (
