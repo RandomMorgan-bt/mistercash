@@ -6,6 +6,8 @@ import { supabase } from '../../lib/supabase'
 export default function Auth() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [phone, setPhone] = useState('')
   const [isLogin, setIsLogin] = useState(true)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,7 +21,23 @@ export default function Auth() {
       if (error) setMessage(error.message)
       else setMessage('Logged in successfully!')
     } else {
-      const { error } = await supabase.auth.signUp({ email, password })
+      if (!displayName.trim()) {
+        setMessage('Please enter your name.')
+        setLoading(false)
+        return
+      }
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName,
+            phone: phone || null,
+          },
+        },
+      })
+
       if (error) setMessage(error.message)
       else setMessage('Account created! Check your email to confirm.')
     }
@@ -39,12 +57,22 @@ export default function Auth() {
           {isLogin ? 'Welcome back' : 'Create your account'}
         </p>
 
+        {!isLogin && (
+          <input
+            type="text"
+            placeholder="Display Name"
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-green-400 transition-all"
+          />
+        )}
+
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={e => setEmail(e.target.value)}
-          className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-yellow-400 transition-all"
+          className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-green-400 transition-all"
         />
 
         <input
@@ -52,8 +80,18 @@ export default function Auth() {
           placeholder="Password"
           value={password}
           onChange={e => setPassword(e.target.value)}
-          className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-6 outline-none focus:border-yellow-400 transition-all"
+          className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-green-400 transition-all"
         />
+
+        {!isLogin && (
+          <input
+            type="tel"
+            placeholder="Phone Number (optional)"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-green-400 transition-all"
+          />
+        )}
 
         {message && (
           <p className="text-green-400 text-sm mb-4 text-center">{message}</p>
@@ -62,7 +100,7 @@ export default function Auth() {
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="w-full bg-green-400 text-black font-bold py-3 tracking-widest hover:bg-yellow-300 transition-all disabled:opacity-50"
+          className="w-full bg-green-400 text-black font-bold py-3 tracking-widest hover:bg-green-300 transition-all disabled:opacity-50"
         >
           {loading ? 'LOADING...' : isLogin ? 'LOGIN' : 'CREATE ACCOUNT'}
         </button>
