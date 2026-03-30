@@ -14,9 +14,19 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push('/auth')
-      } else {
+    } else {
         setUser(user)
-      }
+
+        const { data: profile } = await supabase
+         .from('profiles')
+         .select('onboarding_completed')
+         .eq('user_id', user.id)
+         .single()
+
+    if (!profile || !profile.onboarding_completed) {
+        router.push('/onboarding')
+     }
+    }
     }
     getUser()
   }, [])
