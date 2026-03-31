@@ -16,31 +16,34 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push('/auth')
-    } else {
-        setUser(user)
+        return
+      }
+      setUser(user)
 
-        const { data: profile } = await supabase
-         .from('profiles')
-         .select('onboarding_completed')
-         .eq('user_id', user.id)
-         .single()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_completed')
+        .eq('user_id', user.id)
+        .single()
 
-    if (!profile || !profile.onboarding_completed) {
+      if (!profile || !profile.onboarding_completed) {
         router.push('/onboarding')
-     }
-     const { data: userChats } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-    setChats(userChats || [])
-    const { data: userTasks } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
-    setTasks(userTasks || [])
-    }
+        return
+      }
+
+      const { data: userChats } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+      setChats(userChats || [])
+
+      const { data: userTasks } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+      setTasks((userTasks || []).map(t => ({ ...t, showSubmit: false })))
     }
     getUser()
   }, [])
@@ -51,16 +54,16 @@ export default function Dashboard() {
   }
 
   const navItems = [
-    { id: 'chats',        label: 'Chats',           icon: '💬' },
-    { id: 'tasks',        label: 'Tasks',            icon: '✅' },
-    { id: 'progress',     label: 'Progress',         icon: '📈' },
-    { id: 'certificates', label: 'Certificates',     icon: '🏆' },
-    { id: 'portfolio',    label: 'Portfolio',        icon: '📁' },
-    { id: 'career',       label: 'Career Roadmap',   icon: '🚀' },
-    { id: 'profile',      label: 'Profile',          icon: '👤' },
-    { id: 'subscription', label: 'Subscription',     icon: '💳' },
-    { id: 'settings',     label: 'Settings',         icon: '⚙️' },
-    { id: 'help',         label: 'Help',             icon: '❓' },
+    { id: 'chats',        label: 'Chats',          icon: '💬' },
+    { id: 'tasks',        label: 'Tasks',           icon: '✅' },
+    { id: 'progress',     label: 'Progress',        icon: '📈' },
+    { id: 'certificates', label: 'Certificates',    icon: '🏆' },
+    { id: 'portfolio',    label: 'Portfolio',       icon: '📁' },
+    { id: 'career',       label: 'Career Roadmap',  icon: '🚀' },
+    { id: 'profile',      label: 'Profile',         icon: '👤' },
+    { id: 'subscription', label: 'Subscription',    icon: '💳' },
+    { id: 'settings',     label: 'Settings',        icon: '⚙️' },
+    { id: 'help',         label: 'Help',            icon: '❓' },
   ]
 
   return (
@@ -139,13 +142,17 @@ export default function Dashboard() {
         {/* Content Area */}
         <div className="flex-1 p-8">
 
+          {/* CHATS */}
           {activeSection === 'chats' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your conversations with Mister Cash</p>
               {chats.length === 0 ? (
                 <div className="border border-gray-800 p-8 text-center">
                   <p className="text-gray-600 text-sm">No chats yet. Start your first session with Mister Cash.</p>
-                  <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
+                  <button
+                    onClick={() => router.push('/chats')}
+                    className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all"
+                  >
                     START LEARNING
                   </button>
                 </div>
@@ -161,7 +168,10 @@ export default function Dashboard() {
                       <p className="text-gray-500 text-xs mt-1">{new Date(chat.updated_at).toLocaleDateString()}</p>
                     </div>
                   ))}
-                  <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all w-full">
+                  <button
+                    onClick={() => router.push('/chats')}
+                    className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all w-full"
+                  >
                     CONTINUE LEARNING
                   </button>
                 </div>
@@ -169,47 +179,128 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* TASKS */}
           {activeSection === 'tasks' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your active task boxes</p>
               {tasks.length === 0 ? (
                 <div className="border border-gray-800 p-8 text-center">
                   <p className="text-gray-600 text-sm">No tasks yet. Tasks will appear here once Mister Cash assigns them.</p>
-                  <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
+                  <button
+                    onClick={() => router.push('/chats')}
+                    className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all"
+                  >
                     START LEARNING
                   </button>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {tasks.map(task => (
-                    <div key={task.id} className={`border p-4 flex items-start gap-4 transition-all ${task.completed ? 'border-gray-800 opacity-50' : 'border-gray-700 hover:border-green-400'}`}>
-                      {task.type === 'knowledge' ? (  
-                        <button
-                          onClick={async () => {
-                            await supabase.from('tasks').update({ completed: !task.completed }).eq('id', task.id)
-                            setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t))
-                          }}
-                          className={`mt-1 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-all ${task.completed ? 'bg-green-400 border-green-400 text-black' : 'border-gray-600 hover:border-green-400'}`}
-                        >
-                          {task.completed && '✓'}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setTasks(tasks.map(t => t.id === task.id ? { ...t, showSubmit: !t.showSubmit} : t))}
-                          className="mt-1 text-xs bg-green-400 text-blanc front-bold px-3 py-1 flex-shrink-0 hover:bg-gren-300 transition-all"
-                        >
-                          Submit
-                        </button>
-                      )}
+                    <div
+                      key={task.id}
+                      className={`border p-4 transition-all ${
+                        task.completed
+                          ? 'border-gray-800 opacity-50'
+                          : 'border-gray-700 hover:border-green-400'
+                      }`}
+                    >
+                      <div className="flex items-start gap-4">
+
+                        {task.type === 'knowledge' ? (
+                          <button
+                            onClick={async () => {
+                              await supabase
+                                .from('tasks')
+                                .update({ completed: !task.completed })
+                                .eq('id', task.id)
+                              setTasks(tasks.map(t =>
+                                t.id === task.id ? { ...t, completed: !t.completed } : t
+                              ))
+                            }}
+                            className={`mt-1 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-all ${
+                              task.completed
+                                ? 'bg-green-400 border-green-400 text-black'
+                                : 'border-gray-600 hover:border-green-400'
+                            }`}
+                          >
+                            {task.completed && '✓'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              setTasks(tasks.map(t =>
+                                t.id === task.id ? { ...t, showSubmit: !t.showSubmit } : t
+                              ))
+                            }
+                            className="mt-1 text-xs bg-green-400 text-black font-bold px-3 py-1 flex-shrink-0 hover:bg-green-300 transition-all"
+                          >
+                            SUBMIT
+                          </button>
+                        )}
+
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className={`text-sm font-bold ${task.completed ? 'line-through text-gray-600' : 'text-white'}`}>{task.title}</p>
-                            <span className={`text-xs px-2 py-0.5 rounded ${task.type === 'knowledge' ? 'bg-blue-900 text-blue-300' : 'bg-purple-900 text-purple-300'}`}>
+                            <p className={`text-sm font-bold ${
+                              task.completed ? 'line-through text-gray-600' : 'text-white'
+                            }`}>
+                              {task.title}
+                            </p>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              task.type === 'knowledge'
+                                ? 'bg-blue-900 text-blue-300'
+                                : 'bg-purple-900 text-purple-300'
+                            }`}>
                               {task.type}
                             </span>
                           </div>
                           <p className="text-gray-500 text-xs">{task.description}</p>
+
+                          {task.type === 'practice' && task.showSubmit && (
+                            <div className="mt-3 border-t border-gray-800 pt-3">
+                              <p className="text-gray-400 text-xs mb-2">
+                                Paste a link, describe what you built, or explain what you did. Mister Cash will evaluate it and let you know if it's good.
+                              </p>
+                              <textarea
+                                id={`submit-${task.id}`}
+                                placeholder="Describe what you did or paste a link..."
+                                className="w-full bg-gray-900 border border-gray-700 focus:border-green-400 text-white text-xs px-3 py-2 outline-none resize-none rounded"
+                                rows={3}
+                              />
+                              <button
+                                onClick={async () => {
+                                  const submission = document.getElementById(`submit-${task.id}`).value
+                                  if (!submission.trim()) return
+
+                                  const chatData = await supabase
+                                    .from('chats')
+                                    .select('messages')
+                                    .eq('id', task.chat_id)
+                                    .single()
+
+                                  const existingMessages = JSON.parse(chatData.data.messages || '[]')
+                                  const newMessage = {
+                                    role: 'user',
+                                    content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}`,
+                                  }
+
+                                  await supabase
+                                    .from('chats')
+                                    .update({
+                                      messages: JSON.stringify([...existingMessages, newMessage]),
+                                      updated_at: new Date().toISOString(),
+                                    })
+                                    .eq('id', task.chat_id)
+
+                                  router.push('/chats')
+                                }}
+                                className="mt-2 bg-green-400 text-black font-bold text-xs px-4 py-2 tracking-widest hover:bg-green-300 transition-all"
+                              >
+                                SEND TO MISTER CASH →
+                              </button>
+                            </div>
+                          )}
                         </div>
+
                         <button
                           onClick={async () => {
                             await supabase.from('tasks').delete().eq('id', task.id)
@@ -219,13 +310,16 @@ export default function Dashboard() {
                         >
                           reject
                         </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PROGRESS */}
           {activeSection === 'progress' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your skill levels and learning journey</p>
@@ -235,6 +329,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* CERTIFICATES */}
           {activeSection === 'certificates' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your Mister Cash certifications</p>
@@ -244,6 +339,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* PORTFOLIO */}
           {activeSection === 'portfolio' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Projects you have built and submitted</p>
@@ -253,6 +349,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* CAREER */}
           {activeSection === 'career' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your personalised roadmap to your first opportunity</p>
@@ -262,6 +359,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* PROFILE */}
           {activeSection === 'profile' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your personal information</p>
@@ -282,6 +380,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* SUBSCRIPTION */}
           {activeSection === 'subscription' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Manage your plan</p>
@@ -295,6 +394,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* SETTINGS */}
           {activeSection === 'settings' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Account settings</p>
@@ -304,6 +404,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          {/* HELP */}
           {activeSection === 'help' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Get support</p>
@@ -319,4 +420,3 @@ export default function Dashboard() {
     </div>
   )
 }
-  
