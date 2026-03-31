@@ -87,6 +87,31 @@ export default function ChatsPage() {
       .eq('id', chatId)
   }
 
+  const startNewChat = async () => {
+    const initialMessages = [
+      {
+        role: 'assistant',
+        content: `New goal, new grind. \n\nWhat do you want to learn or build this time? Tell me the goal.`,
+      }
+    ]
+    const { data: newChat } = await supabase
+      .from('chats')
+      .insert({
+        user_id: user.id,
+        title: 'New Chat',
+        messages: JSON.stringify(initialMessages),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (newChat) {
+      setChatId(newChat.id)
+      setMessages(initialMessages)
+    }
+  }
+
+
   const sendMessage = async () => {
     if (!input.trim() || loading) return
 
@@ -109,6 +134,13 @@ export default function ChatsPage() {
 
     const data = await response.json()
     const finalMessages = [...updatedMessages, { role: 'assistant', content: data.message }]
+    if (messages.length === 1) {
+      const title = input.slice(0, 40)
+      await supabase
+        .from('chats')
+        .update({ title })
+        .eq('id', chatId)
+    }
     setMessages(finalMessages)
     await saveMessages(finalMessages)
     setLoading(false)
@@ -137,6 +169,12 @@ export default function ChatsPage() {
           <h1 className="font-bold text-green-400 tracking-widest text-sm">MISTER CASH</h1>
           <p className="text-gray-500 text-xs">Your AI mentor</p>
         </div>
+        <button
+          onClick={startNewChat}
+          className="ml-auto text-xs text-gray-500 hover:text-green-400 border border-gray-700 hover:border-green-400 px-3 py-1 rounded-lg transition-all"
+        >
+          + New Chat
+        </button>
       </div>
 
       {/* Messages */}
