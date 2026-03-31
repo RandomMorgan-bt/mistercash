@@ -12,6 +12,7 @@ export default function Auth() {
   const [isLogin, setIsLogin] = useState(true)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
   async function handleSubmit() {
@@ -77,13 +78,22 @@ export default function Auth() {
           className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-green-400 transition-all"
         />
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 mb-4 outline-none focus:border-green-400 transition-all"
-        />
+        <div className="relative mb-4">
+         <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full bg-gray-900 text-white border border-gray-700 px-4 py-3 outline-none focus:border-green-400"
+         />
+          <button
+           type="button"
+           onClick={() => setShowPassword(!showPassword)}
+           className="absolute right-3 top-3 text-gray-500 hover:text-green-400 text-sm"
+          >
+            {showPassword ? '🙈' : '👁️'}
+          </button>
+        </div>
 
         {!isLogin && (
           <input
