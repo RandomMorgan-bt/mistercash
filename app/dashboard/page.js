@@ -183,39 +183,48 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   {tasks.map(task => (
                     <div key={task.id} className={`border p-4 flex items-start gap-4 transition-all ${task.completed ? 'border-gray-800 opacity-50' : 'border-gray-700 hover:border-green-400'}`}>
-                      <button
-                        onClick={async () => {
-                          await supabase.from('tasks').update({ completed: !task.completed }).eq('id', task.id)
-                          setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t))
-                        }}
-                        className={`mt-1 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-all ${task.completed ? 'bg-green-400 border-green-400 text-black' : 'border-gray-600 hover:border-green-400'}`}
-                      >
-                        {task.completed && '✓'}
-                      </button>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className={`text-sm font-bold ${task.completed ? 'line-through text-gray-600' : 'text-white'}`}>{task.title}</p>
-                          <span className={`text-xs px-2 py-0.5 rounded ${task.type === 'knowledge' ? 'bg-blue-900 text-blue-300' : 'bg-purple-900 text-purple-300'}`}>
-                            {task.type}
-                          </span>
+                      {task.type === 'knowledge' ? (  
+                        <button
+                          onClick={async () => {
+                            await supabase.from('tasks').update({ completed: !task.completed }).eq('id', task.id)
+                            setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t))
+                          }}
+                          className={`mt-1 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-all ${task.completed ? 'bg-green-400 border-green-400 text-black' : 'border-gray-600 hover:border-green-400'}`}
+                        >
+                          {task.completed && '✓'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setTasks(tasks.map(t => t.id === task.id ? { ...t, showSubmit: !t.showSubmit} : t))}
+                          className="mt-1 text-xs bg-green-400 text-blanc front-bold px-3 py-1 flex-shrink-0 hover:bg-gren-300 transition-all"
+                        >
+                          Submit
+                        </button>
+                      )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className={`text-sm font-bold ${task.completed ? 'line-through text-gray-600' : 'text-white'}`}>{task.title}</p>
+                            <span className={`text-xs px-2 py-0.5 rounded ${task.type === 'knowledge' ? 'bg-blue-900 text-blue-300' : 'bg-purple-900 text-purple-300'}`}>
+                              {task.type}
+                            </span>
+                          </div>
+                          <p className="text-gray-500 text-xs">{task.description}</p>
                         </div>
-                        <p className="text-gray-500 text-xs">{task.description}</p>
+                        <button
+                          onClick={async () => {
+                            await supabase.from('tasks').delete().eq('id', task.id)
+                            setTasks(tasks.filter(t => t.id !== task.id))
+                          }}
+                          className="text-gray-700 hover:text-red-400 text-xs transition-all flex-shrink-0"
+                        >
+                          reject
+                        </button>
                       </div>
-                      <button
-                        onClick={async () => {
-                          await supabase.from('tasks').delete().eq('id', task.id)
-                          setTasks(tasks.filter(t => t.id !== task.id))
-                        }}
-                        className="text-gray-700 hover:text-red-400 text-xs transition-all flex-shrink-0"
-                      >
-                        reject
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
           {activeSection === 'progress' && (
             <div>
