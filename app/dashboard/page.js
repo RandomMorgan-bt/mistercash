@@ -78,7 +78,7 @@ export default function Dashboard() {
           {navItems.map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveSection(item.id)}
+              onClick={() => item.id === 'chats' ? router.push('/chats') : setActiveSection(item.id)}
               className={`w-full flex items-center gap-3 px-6 py-3 text-sm text-left transition-all ${
                 activeSection === item.id
                   ? 'bg-green-400 text-black font-bold'
@@ -130,7 +130,7 @@ export default function Dashboard() {
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your conversations with Mister Cash</p>
               <div className="border border-gray-800 p-8 text-center">
                 <p className="text-gray-600 text-sm">No chats yet. Start your first session with Mister Cash.</p>
-                <button className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
+                <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
                   START LEARNING
                 </button>
               </div>
@@ -239,3 +239,4 @@ export default function Dashboard() {
     </div>
   )
 }
+  
