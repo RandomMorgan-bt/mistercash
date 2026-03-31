@@ -24,13 +24,13 @@ export default function Onboarding() {
 
   async function finishOnboarding() {
     setLoading(true)
-    await supabase.from('profiles').insert({
+    await supabase.from('profiles').upsert({
       user_id: user.id,
       onboarding_completed: true,
       goal,
       experience_level: experienceLevel || null,
       learning_style: learningStyle.length > 0 ? learningStyle.join(', ') : null,
-    })
+    }, { onConflict: 'user_id'})
     router.push('/dashboard')
   }
 
