@@ -143,6 +143,18 @@ export default function ChatsPage() {
     }
     setMessages(finalMessages)
     await saveMessages(finalMessages)
+    if (data.tasks && data.tasks.tasks) {
+      const taskRows = data.tasks.tasks.map(task => ({
+        user_id: user.id,
+        chat_id: chatId,
+        box_id: data.tasks.box_id,
+        title: task.title,
+        description: task.description,
+        type: task.type,
+        completed: false,
+      }))
+      await supabase.from('tasks').insert(taskRows)
+    }
     setLoading(false)
   }
 
