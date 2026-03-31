@@ -81,6 +81,12 @@ export default function ChatsPage() {
 
       {/* Header */}
       <div className="border-b border-gray-800 px-6 py-4 flex items-center gap-3">
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="text-gray-500 hover:text-green-400 mr-2 text-lg"
+        >
+          ←
+        </button>
         <span className="text-2xl">💵⌚</span>
         <div>
           <h1 className="font-bold text-green-400 tracking-widest text-sm">MISTER CASH</h1>
