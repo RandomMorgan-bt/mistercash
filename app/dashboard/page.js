@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [activeSection, setActiveSection] = useState('chats')
+  const [chats, setChats] = useState([])
   const router = useRouter()
 
   useEffect(() => {
@@ -26,6 +27,12 @@ export default function Dashboard() {
     if (!profile || !profile.onboarding_completed) {
         router.push('/onboarding')
      }
+     const { data: userChats } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+    setChats(userChats || [])
     }
     }
     getUser()
@@ -128,12 +135,30 @@ export default function Dashboard() {
           {activeSection === 'chats' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your conversations with Mister Cash</p>
-              <div className="border border-gray-800 p-8 text-center">
-                <p className="text-gray-600 text-sm">No chats yet. Start your first session with Mister Cash.</p>
-                <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
-                  START LEARNING
-                </button>
-              </div>
+              {chats.length === 0 ? (
+                <div className="border border-gray-800 p-8 text-center">
+                  <p className="text-gray-600 text-sm">No chats yet. Start your first session with Mister Cash.</p>
+                  <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
+                    START LEARNING
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {chats.map(chat => (
+                    <div
+                      key={chat.id}
+                      onClick={() => router.push('/chats')}
+                      className="border border-gray-800 p-4 cursor-pointer hover:border-green-400 transition-all"
+                    >
+                      <p className="text-white text-sm font-bold">{chat.title}</p>
+                      <p className="text-gray-500 text-xs mt-1">{new Date(chat.updated_at).toLocaleDateString()}</p>
+                    </div>
+                  ))}
+                  <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all w-full">
+                    CONTINUE LEARNING
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
