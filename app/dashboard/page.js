@@ -8,6 +8,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [activeSection, setActiveSection] = useState('chats')
   const [chats, setChats] = useState([])
+  const [tasks, setTasks] = useState([])
   const router = useRouter()
 
   useEffect(() => {
@@ -33,6 +34,12 @@ export default function Dashboard() {
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
     setChats(userChats || [])
+    const { data: userTasks } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
+    setTasks(userTasks || [])
     }
     }
     getUser()
@@ -165,9 +172,48 @@ export default function Dashboard() {
           {activeSection === 'tasks' && (
             <div>
               <p className="text-gray-500 text-sm mb-6 tracking-wide">Your active task boxes</p>
-              <div className="border border-gray-800 p-8 text-center">
-                <p className="text-gray-600 text-sm">No tasks yet. Tasks will appear here once Mister Cash assigns them.</p>
-              </div>
+              {tasks.length === 0 ? (
+                <div className="border border-gray-800 p-8 text-center">
+                  <p className="text-gray-600 text-sm">No tasks yet. Tasks will appear here once Mister Cash assigns them.</p>
+                  <button onClick={() => router.push('/chats')} className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
+                    START LEARNING
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {tasks.map(task => (
+                    <div key={task.id} className={`border p-4 flex items-start gap-4 transition-all ${task.completed ? 'border-gray-800 opacity-50' : 'border-gray-700 hover:border-green-400'}`}>
+                      <button
+                        onClick={async () => {
+                          await supabase.from('tasks').update({ completed: !task.completed }).eq('id', task.id)
+                          setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t))
+                        }}
+                        className={`mt-1 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-all ${task.completed ? 'bg-green-400 border-green-400 text-black' : 'border-gray-600 hover:border-green-400'}`}
+                      >
+                        {task.completed && '✓'}
+                      </button>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className={`text-sm font-bold ${task.completed ? 'line-through text-gray-600' : 'text-white'}`}>{task.title}</p>
+                          <span className={`text-xs px-2 py-0.5 rounded ${task.type === 'knowledge' ? 'bg-blue-900 text-blue-300' : 'bg-purple-900 text-purple-300'}`}>
+                            {task.type}
+                          </span>
+                        </div>
+                        <p className="text-gray-500 text-xs">{task.description}</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await supabase.from('tasks').delete().eq('id', task.id)
+                          setTasks(tasks.filter(t => t.id !== task.id))
+                        }}
+                        className="text-gray-700 hover:text-red-400 text-xs transition-all flex-shrink-0"
+                      >
+                        reject
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
