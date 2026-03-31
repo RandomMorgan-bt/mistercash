@@ -11,6 +11,7 @@ export default function ChatsPage() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [chatId, setChatId] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -30,12 +31,43 @@ export default function ChatsPage() {
 
       setProfile(profile)
 
-      setMessages([
-        {
-          role: 'assistant',
-          content: `What's up. I'm Mister Cash. 💵⌚\n\nYou told me you want to become: **${profile?.goal || 'something great'}**.\n\nLet's get to work. Tell me where you're at right now with this goal — what have you already tried or learned?`,
-        },
-      ])
+      // Load most recent chat or create new one
+      const { data: existingChats } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+
+      if (existingChats && existingChats.length > 0) {
+        const chat = existingChats[0]
+        setChatId(chat.id)
+        setMessages(JSON.parse(chat.messages))
+      } else {
+        // Create new chat
+        const initialMessages = [
+          {
+            role: 'assistant',
+            content: `What's up. I'm Mister Cash. 💵⌚\n\nYou told me you want to become: **${profile?.goal || 'something great'}**.\n\nLet's get to work. Tell me where you're at right now with this goal — what have you already tried or learned?`,
+          },
+        ]
+
+        const { data: newChat } = await supabase
+          .from('chats')
+          .insert({
+            user_id: user.id,
+            title: 'Chat 1',
+            messages: JSON.stringify(initialMessages),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+
+        if (newChat) {
+          setChatId(newChat.id)
+          setMessages(initialMessages)
+        }
+      }
     }
     getUser()
   }, [])
@@ -43,6 +75,17 @@ export default function ChatsPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const saveMessages = async (updatedMessages) => {
+    if (!chatId) return
+    await supabase
+      .from('chats')
+      .update({
+        messages: JSON.stringify(updatedMessages),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', chatId)
+  }
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
@@ -65,7 +108,9 @@ export default function ChatsPage() {
     })
 
     const data = await response.json()
-    setMessages([...updatedMessages, { role: 'assistant', content: data.message }])
+    const finalMessages = [...updatedMessages, { role: 'assistant', content: data.message }]
+    setMessages(finalMessages)
+    await saveMessages(finalMessages)
     setLoading(false)
   }
 
