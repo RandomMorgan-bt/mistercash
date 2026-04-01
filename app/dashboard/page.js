@@ -9,6 +9,8 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState('chats')
   const [chats, setChats] = useState([])
   const [tasks, setTasks] = useState([])
+  const [subscription, setSubscription] = useState(null)
+  const [subscribing, setSubscribing] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -44,6 +46,13 @@ export default function Dashboard() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
       setTasks((userTasks || []).map(t => ({ ...t, showSubmit: false })))
+
+      const { data: userSub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+      setSubscription(userSub)
     }
     getUser()
   }, [])
@@ -51,6 +60,29 @@ export default function Dashboard() {
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/auth')
+  }
+
+  async function handleSubscribe(priceId) {
+    if (!user) return
+    setSubscribing(true)
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          priceId,
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      })
+      const data = await response.json()
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error('Subscription error:', error)
+    }
+    setSubscribing(false)
   }
 
   const navItems = [
@@ -64,6 +96,36 @@ export default function Dashboard() {
     { id: 'subscription', label: 'Subscription',    icon: '💳' },
     { id: 'settings',     label: 'Settings',        icon: '⚙️' },
     { id: 'help',         label: 'Help',            icon: '❓' },
+  ]
+
+  const plans = [
+    {
+      id: 'monthly',
+      name: 'Monthly',
+      price: '€9.99',
+      period: 'per month',
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_MONTHLY,
+      savings: null,
+      highlight: false,
+    },
+    {
+      id: 'quarterly',
+      name: 'Every 3 Months',
+      price: '€24.99',
+      period: 'every 3 months',
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_QUARTERLY,
+      savings: 'Save 17%',
+      highlight: false,
+    },
+    {
+      id: 'yearly',
+      name: 'Yearly',
+      price: '€79.99',
+      period: 'per year',
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_YEARLY,
+      savings: 'Save 33% — Best Deal',
+      highlight: true,
+    },
   ]
 
   return (
@@ -381,13 +443,76 @@ export default function Dashboard() {
           {/* SUBSCRIPTION */}
           {activeSection === 'subscription' && (
             <div>
-              <p className="text-gray-500 text-sm mb-6 tracking-wide">Manage your plan</p>
-              <div className="border border-gray-800 p-8 text-center">
-                <p className="text-green-400 font-bold tracking-widest mb-2">FREE TRIAL</p>
-                <p className="text-gray-600 text-sm">14 days remaining. Upgrade to keep learning without limits.</p>
-                <button className="mt-4 bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all">
-                  UPGRADE NOW
-                </button>
+              <p className="text-gray-500 text-sm mb-2 tracking-wide">Manage your plan</p>
+
+              {subscription?.status === 'active' ? (
+                <div className="border border-green-400 p-6 mb-8">
+                  <p className="text-green-400 font-bold tracking-widest mb-1">ACTIVE SUBSCRIPTION</p>
+                  <p className="text-gray-400 text-sm">
+                    Your plan renews on {new Date(subscription.current_period_end).toLocaleDateString()}.
+                  </p>
+                </div>
+              ) : subscription?.status === 'trialing' ? (
+                <div className="border border-green-400 p-6 mb-8">
+                  <p className="text-green-400 font-bold tracking-widest mb-1">FREE TRIAL ACTIVE</p>
+                  <p className="text-gray-400 text-sm">
+                    Your trial ends on {new Date(subscription.current_period_end).toLocaleDateString()}. Pick a plan below to continue after your trial.
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-gray-800 p-6 mb-8">
+                  <p className="text-green-400 font-bold tracking-widest mb-1">14-DAY FREE TRIAL</p>
+                  <p className="text-gray-400 text-sm">Full access, no credit card required until trial ends. Pick a plan to get started.</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 max-w-3xl">
+                {plans.map(plan => (
+                  <div
+                    key={plan.id}
+                    className={`border p-6 transition-all ${
+                      plan.highlight
+                        ? 'border-green-400 bg-gray-950'
+                        : 'border-gray-800 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <p className="text-white font-bold tracking-wide">{plan.name}</p>
+                          {plan.savings && (
+                            <span className={`text-xs px-2 py-0.5 font-bold tracking-wide ${
+                              plan.highlight
+                                ? 'bg-green-400 text-black'
+                                : 'bg-gray-800 text-green-400'
+                            }`}>
+                              {plan.savings}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 text-xs">{plan.period}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p className="text-white font-bold text-xl">{plan.price}</p>
+                        <button
+                          onClick={() => handleSubscribe(plan.priceId)}
+                          disabled={subscribing || subscription?.status === 'active'}
+                          className={`font-bold text-xs px-6 py-3 tracking-widest transition-all disabled:opacity-40 ${
+                            plan.highlight
+                              ? 'bg-green-400 text-black hover:bg-green-300'
+                              : 'border border-green-400 text-green-400 hover:bg-green-400 hover:text-black'
+                          }`}
+                        >
+                          {subscribing
+                            ? 'LOADING...'
+                            : subscription?.status === 'active'
+                              ? 'CURRENT'
+                              : 'GET STARTED'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
