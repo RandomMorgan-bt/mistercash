@@ -161,7 +161,7 @@ export default function Dashboard() {
                   {chats.map(chat => (
                     <div
                       key={chat.id}
-                      onClick={() => router.push('/chats')}
+                      onClick={() => router.push(`/chats?id=${chat.id}`)}
                       className="border border-gray-800 p-4 cursor-pointer hover:border-green-400 transition-all"
                     >
                       <p className="text-white text-sm font-bold">{chat.title}</p>
@@ -272,14 +272,24 @@ export default function Dashboard() {
                                   e.target.textContent = 'SENDING...'
                                   const submission = document.getElementById(`submit-${task.id}`).value
                                   if (!submission.trim()) return
-                                  const chatData = await supabase.from('chats').select('messages').eq('id', task.chat_id).single()
+                                  const chatData = await supabase
+                                    .from('chats')
+                                    .select('messages')
+                                    .eq('id', task.chat_id)
+                                    .single()
                                   const existingMessages = JSON.parse(chatData.data.messages || '[]')
-                                  const newMessage = { role: 'user', content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}` }
-                                  await supabase.from('chats').update({
-                                    messages: JSON.stringify([...existingMessages, newMessage]),
-                                    updated_at: new Date().toISOString(),
-                                  }).eq('id', task.chat_id)
-                                  router.push('/chats')
+                                  const newMessage = {
+                                    role: 'user',
+                                    content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}`,
+                                  }
+                                  await supabase
+                                    .from('chats')
+                                    .update({
+                                      messages: JSON.stringify([...existingMessages, newMessage]),
+                                      updated_at: new Date().toISOString(),
+                                    })
+                                    .eq('id', task.chat_id)
+                                  router.push(`/chats?id=${task.chat_id}`)
                                 }}
                                 className="mt-2 bg-green-400 text-black font-bold text-xs px-4 py-2 tracking-widest hover:bg-green-300 transition-all"
                               >

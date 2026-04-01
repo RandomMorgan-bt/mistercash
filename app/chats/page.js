@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 import ReactMarkdown from 'react-markdown'
 
-export default function ChatsPage() {
+function ChatsContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const chatIdFromUrl = searchParams?.get('id') ? decodeURIComponent(searchParams.get('id')) : null
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [messages, setMessages] = useState([])
@@ -32,6 +34,26 @@ export default function ChatsPage() {
 
       setProfile(profile)
 
+      if (chatIdFromUrl) {
+        const { data: specificChat } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('id', chatIdFromUrl)
+          .eq('user_id', user.id)
+          .single()
+
+        if (specificChat) {
+          setChatId(specificChat.id)
+          const loadedMessages = JSON.parse(specificChat.messages)
+          setMessages(loadedMessages)
+          const lastMessage = loadedMessages[loadedMessages.length - 1]
+          if (lastMessage?.role === 'user' && lastMessage?.content?.startsWith('[TASK SUBMISSION')) {
+            triggerEvaluation(loadedMessages, profile, specificChat.id)
+          }
+          return
+        }
+      }
+
       const { data: existingChats } = await supabase
         .from('chats')
         .select('*')
@@ -44,8 +66,6 @@ export default function ChatsPage() {
         setChatId(chat.id)
         const loadedMessages = JSON.parse(chat.messages)
         setMessages(loadedMessages)
-
-        // Auto-respond if last message is a task submission
         const lastMessage = loadedMessages[loadedMessages.length - 1]
         if (lastMessage?.role === 'user' && lastMessage?.content?.startsWith('[TASK SUBMISSION')) {
           triggerEvaluation(loadedMessages, profile, chat.id)
@@ -76,7 +96,7 @@ export default function ChatsPage() {
       }
     }
     getUser()
-  }, [])
+  }, [chatIdFromUrl])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -108,7 +128,6 @@ export default function ChatsPage() {
       })
       .eq('id', currentChatId)
 
-    // If Mister Cash approves, mark the task complete
     const approvalKeywords = [
       'great', 'good', 'solid', 'nailed', 'well done', 'approved',
       'complete', 'done', 'nice', 'excellent', 'impressive',
@@ -301,5 +320,13 @@ export default function ChatsPage() {
       </div>
 
     </div>
+  )
+}
+
+export default function ChatsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black" />}>
+      <ChatsContent />
+    </Suspense>
   )
 }
