@@ -8,7 +8,9 @@ import ReactMarkdown from 'react-markdown'
 function ChatsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const chatIdFromUrl = searchParams?.get('id') ? decodeURIComponent(searchParams.get('id')) : null
+  const chatIdFromUrl = searchParams?.get('id')
+    ? decodeURIComponent(searchParams.get('id'))
+    : null
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [messages, setMessages] = useState([])
@@ -48,7 +50,7 @@ function ChatsContent() {
           setMessages(loadedMessages)
           const lastMessage = loadedMessages[loadedMessages.length - 1]
           if (lastMessage?.role === 'user' && lastMessage?.content?.startsWith('[TASK SUBMISSION')) {
-            triggerEvaluation(loadedMessages, profile, specificChat.id)
+            triggerEvaluation(loadedMessages, profile, specificChat.id, user.id)
           }
           return
         }
@@ -68,7 +70,7 @@ function ChatsContent() {
         setMessages(loadedMessages)
         const lastMessage = loadedMessages[loadedMessages.length - 1]
         if (lastMessage?.role === 'user' && lastMessage?.content?.startsWith('[TASK SUBMISSION')) {
-          triggerEvaluation(loadedMessages, profile, chat.id)
+          triggerEvaluation(loadedMessages, profile, chat.id, user.id)
         }
       } else {
         const initialMessages = [
@@ -102,7 +104,24 @@ function ChatsContent() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const triggerEvaluation = async (currentMessages, currentProfile, currentChatId) => {
+  const updateMemory = async (userId, conversationMessages, assistantResponse) => {
+    try {
+      const memoryResponse = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          messages: conversationMessages,
+          assistantResponse,
+        }),
+      })
+      await memoryResponse.json()
+    } catch (e) {
+      console.error('Memory update failed:', e)
+    }
+  }
+
+  const triggerEvaluation = async (currentMessages, currentProfile, currentChatId, userId) => {
     setLoading(true)
 
     const response = await fetch('/api/chat', {
@@ -113,6 +132,7 @@ function ChatsContent() {
         userGoal: currentProfile?.goal,
         experienceLevel: currentProfile?.experience_level,
         learningStyle: currentProfile?.learning_style,
+        userId,
       }),
     })
 
@@ -127,6 +147,17 @@ function ChatsContent() {
         updated_at: new Date().toISOString(),
       })
       .eq('id', currentChatId)
+
+    // Update memory
+    await updateMemory(userId, finalMessages, data.message)
+
+    // Handle memory deletion if requested
+    if (data.deleteMemory) {
+      await supabase
+        .from('memories')
+        .update({ content: data.updatedMemory, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+    }
 
     const approvalKeywords = [
       'great', 'good', 'solid', 'nailed', 'well done', 'approved',
@@ -204,6 +235,7 @@ function ChatsContent() {
         userGoal: profile?.goal,
         experienceLevel: profile?.experience_level,
         learningStyle: profile?.learning_style,
+        userId: user?.id,
       }),
     })
 
@@ -220,6 +252,17 @@ function ChatsContent() {
 
     setMessages(finalMessages)
     await saveMessages(finalMessages)
+
+    // Update memory after every response
+    await updateMemory(user?.id, finalMessages, data.message)
+
+    // Handle memory deletion if requested
+    if (data.deleteMemory && data.updatedMemory !== undefined) {
+      await supabase
+        .from('memories')
+        .update({ content: data.updatedMemory, updated_at: new Date().toISOString() })
+        .eq('user_id', user?.id)
+    }
 
     if (data.tasks && data.tasks.tasks) {
       const taskRows = data.tasks.tasks.map(task => ({

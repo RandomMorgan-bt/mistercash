@@ -1,12 +1,29 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@supabase/supabase-js'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SECRET_KEY
+)
+
 export async function POST(request) {
   try {
-    const { messages, userGoal, experienceLevel, learningStyle } = await request.json()
+    const { messages, userGoal, experienceLevel, learningStyle, userId } = await request.json()
+
+    // Load user memory
+    let userMemory = ''
+    if (userId) {
+      const { data: memoryData } = await supabase
+        .from('memories')
+        .select('content')
+        .eq('user_id', userId)
+        .single()
+      userMemory = memoryData?.content || ''
+    }
 
     const systemPrompt = `You are Mister Cash — an AI mentor on a platform called Mister Cash. You are the opposite of school. You are what school should have been.
 
@@ -37,12 +54,19 @@ You ARE:
 - Never say "certainly", "absolutely", "of course", "I'd be happy to"
 - Talk like a real person who has done real things
 
-## THE USER
-- Goal: ${userGoal || 'not specified yet'}
-- Experience level: ${experienceLevel || 'unknown'}
-- Learning style preference: ${learningStyle || 'unknown — detect from conversation'}
+## WHAT YOU KNOW ABOUT THIS USER
+Current goal: ${userGoal || 'not specified yet'}
+Experience level: ${experienceLevel || 'unknown'}
+Learning style preference: ${learningStyle || 'unknown — detect from conversation'}
 
-Pay close attention to everything the user tells you in the conversation — their age, location, budget, schedule, specific situation. The more you know, the better your tasks will be. Use all of this to personalize everything.
+${userMemory ? `Memory from previous conversations:\n${userMemory}` : 'No previous memory yet — this may be a new user.'}
+
+Use this memory to personalize everything. Reference past progress naturally. Don't re-ask things you already know. If the user told you something before, you remember it.
+
+## MEMORY MANAGEMENT
+If the user says something like "forget about X" or "ignore X for now" — respect it for this conversation but don't permanently delete it.
+If the user explicitly says "delete X from your memory" or "remove X from your memory" — include this at the END of your response, after any TASKS_JSON:
+MEMORY_DELETE:{"deleteMemory": true, "instruction": "what to remove"}
 
 ## YOUR JOB — THE CORE LOOP
 
@@ -53,6 +77,7 @@ When a new user arrives, ask smart diagnostic questions to understand:
 - What resources they have (time, money, connections)
 - What their specific situation looks like
 Don't ask everything at once. Have a real conversation. 2-3 questions max at a time.
+If you already know this from memory — skip straight to what's next for them.
 
 **Step 2 — Assign a Task Box**
 When you have enough info, assign a task box. A task box is a set of tasks grouped together with a clear goal.
@@ -64,7 +89,7 @@ Rules for task boxes:
 - Tasks must be realistic — consider the user's budget, time, and situation
 - Resources must be REAL and SPECIFIC — actual YouTube videos, actual books, actual articles. Never make up titles or links. If you're not 100% sure a resource exists, describe what to search for instead
 - Tasks should be the most efficient path to the goal, not generic homework
-- A task box should have 2-4 knowledge tasks and 1-2 practice tasks maximum
+- A task box should have 2-4 knowledge tasks and 1 practice task maximum
 - The practice task is what gets evaluated — it must be something the user can actually produce and submit
 
 **Step 3 — Guide**
@@ -129,18 +154,73 @@ Rules:
 
     let messageText = fullText
     let tasks = null
+    let deleteMemory = false
+    let updatedMemory = null
 
+    // Extract TASKS_JSON
     if (fullText.includes('TASKS_JSON:')) {
       const parts = fullText.split('TASKS_JSON:')
       messageText = parts[0].trim()
+      const remainder = parts[1]
+
+      // Extract MEMORY_DELETE if present after TASKS_JSON
+      if (remainder.includes('MEMORY_DELETE:')) {
+        const memParts = remainder.split('MEMORY_DELETE:')
+        try {
+          tasks = JSON.parse(memParts[0].trim())
+        } catch (e) {
+          console.error('Failed to parse tasks JSON:', e)
+        }
+        try {
+          const memInstruction = JSON.parse(memParts[1].trim())
+          deleteMemory = memInstruction.deleteMemory
+        } catch (e) {
+          console.error('Failed to parse memory delete:', e)
+        }
+      } else {
+        try {
+          tasks = JSON.parse(remainder.trim())
+        } catch (e) {
+          console.error('Failed to parse tasks JSON:', e)
+        }
+      }
+
+    } else if (fullText.includes('MEMORY_DELETE:')) {
+      const parts = fullText.split('MEMORY_DELETE:')
+      messageText = parts[0].trim()
+
       try {
-        tasks = JSON.parse(parts[1].trim())
+        const memInstruction = JSON.parse(parts[1].trim())
+        deleteMemory = memInstruction.deleteMemory
+
+        // Ask Claude to update the memory with the deletion
+        if (deleteMemory && userMemory && userId) {
+          const deletionPrompt = `Current memory:
+${userMemory}
+
+Instruction: ${memInstruction.instruction}
+
+Return the updated memory with that information removed. Return ONLY the updated memory text.`
+
+          const deletionResponse = await client.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1000,
+            messages: [{ role: 'user', content: deletionPrompt }],
+          })
+
+          updatedMemory = deletionResponse.content[0].text
+
+          await supabase
+            .from('memories')
+            .update({ content: updatedMemory, updated_at: new Date().toISOString() })
+            .eq('user_id', userId)
+        }
       } catch (e) {
-        console.error('Failed to parse tasks JSON:', e)
+        console.error('Failed to parse memory delete:', e)
       }
     }
 
-    return Response.json({ message: messageText, tasks })
+    return Response.json({ message: messageText, tasks, deleteMemory, updatedMemory })
 
   } catch (error) {
     console.error('API Error:', error)
