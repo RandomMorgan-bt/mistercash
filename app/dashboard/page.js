@@ -267,30 +267,18 @@ export default function Dashboard() {
                                 rows={3}
                               />
                               <button
-                                onClick={async () => {
+                                onClick={async (e) => {
+                                  e.target.disabled = true
+                                  e.target.textContent = 'SENDING...'
                                   const submission = document.getElementById(`submit-${task.id}`).value
                                   if (!submission.trim()) return
-
-                                  const chatData = await supabase
-                                    .from('chats')
-                                    .select('messages')
-                                    .eq('id', task.chat_id)
-                                    .single()
-
+                                  const chatData = await supabase.from('chats').select('messages').eq('id', task.chat_id).single()
                                   const existingMessages = JSON.parse(chatData.data.messages || '[]')
-                                  const newMessage = {
-                                    role: 'user',
-                                    content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}`,
-                                  }
-
-                                  await supabase
-                                    .from('chats')
-                                    .update({
-                                      messages: JSON.stringify([...existingMessages, newMessage]),
-                                      updated_at: new Date().toISOString(),
-                                    })
-                                    .eq('id', task.chat_id)
-
+                                  const newMessage = { role: 'user', content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}` }
+                                  await supabase.from('chats').update({
+                                    messages: JSON.stringify([...existingMessages, newMessage]),
+                                    updated_at: new Date().toISOString(),
+                                  }).eq('id', task.chat_id)
                                   router.push('/chats')
                                 }}
                                 className="mt-2 bg-green-400 text-black font-bold text-xs px-4 py-2 tracking-widest hover:bg-green-300 transition-all"
