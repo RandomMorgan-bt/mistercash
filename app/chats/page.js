@@ -31,7 +31,6 @@ export default function ChatsPage() {
 
       setProfile(profile)
 
-      // Load most recent chat or create new one
       const { data: existingChats } = await supabase
         .from('chats')
         .select('*')
@@ -42,9 +41,15 @@ export default function ChatsPage() {
       if (existingChats && existingChats.length > 0) {
         const chat = existingChats[0]
         setChatId(chat.id)
-        setMessages(JSON.parse(chat.messages))
+        const loadedMessages = JSON.parse(chat.messages)
+        setMessages(loadedMessages)
+
+        // Auto-respond if last message is a task submission
+        const lastMessage = loadedMessages[loadedMessages.length - 1]
+        if (lastMessage?.role === 'user' && lastMessage?.content?.startsWith('[TASK SUBMISSION')) {
+          triggerEvaluation(loadedMessages, profile, chat.id)
+        }
       } else {
-        // Create new chat
         const initialMessages = [
           {
             role: 'assistant',
@@ -76,6 +81,56 @@ export default function ChatsPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const triggerEvaluation = async (currentMessages, currentProfile, currentChatId) => {
+    setLoading(true)
+
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: currentMessages,
+        userGoal: currentProfile?.goal,
+        experienceLevel: currentProfile?.experience_level,
+        learningStyle: currentProfile?.learning_style,
+      }),
+    })
+
+    const data = await response.json()
+    const finalMessages = [...currentMessages, { role: 'assistant', content: data.message }]
+    setMessages(finalMessages)
+
+    await supabase
+      .from('chats')
+      .update({
+        messages: JSON.stringify(finalMessages),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', currentChatId)
+
+    // If Mister Cash approves, mark the task complete
+    const approvalKeywords = [
+      'great', 'good', 'solid', 'nailed', 'well done', 'approved',
+      'complete', 'done', 'nice', 'excellent', 'impressive',
+    ]
+    const responseText = data.message.toLowerCase()
+    const isApproved = approvalKeywords.some(word => responseText.includes(word))
+
+    if (isApproved) {
+      const submissionMessage = currentMessages[currentMessages.length - 1].content
+      const taskTitleMatch = submissionMessage.match(/\[TASK SUBMISSION - (.+?)\]/)
+      if (taskTitleMatch) {
+        const taskTitle = taskTitleMatch[1]
+        await supabase
+          .from('tasks')
+          .update({ completed: true })
+          .eq('chat_id', currentChatId)
+          .eq('title', taskTitle)
+      }
+    }
+
+    setLoading(false)
+  }
+
   const saveMessages = async (updatedMessages) => {
     if (!chatId) return
     await supabase
@@ -91,9 +146,10 @@ export default function ChatsPage() {
     const initialMessages = [
       {
         role: 'assistant',
-        content: `New goal, new grind. \n\nWhat do you want to learn or build this time? Tell me the goal.`,
-      }
+        content: `New goal, new grind. 💵⌚\n\nWhat do you want to learn or build this time? Tell me the goal.`,
+      },
     ]
+
     const { data: newChat } = await supabase
       .from('chats')
       .insert({
@@ -110,7 +166,6 @@ export default function ChatsPage() {
       setMessages(initialMessages)
     }
   }
-
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return
@@ -134,6 +189,7 @@ export default function ChatsPage() {
 
     const data = await response.json()
     const finalMessages = [...updatedMessages, { role: 'assistant', content: data.message }]
+
     if (messages.length === 1) {
       const title = input.slice(0, 40)
       await supabase
@@ -141,8 +197,10 @@ export default function ChatsPage() {
         .update({ title })
         .eq('id', chatId)
     }
+
     setMessages(finalMessages)
     await saveMessages(finalMessages)
+
     if (data.tasks && data.tasks.tasks) {
       const taskRows = data.tasks.tasks.map(task => ({
         user_id: user.id,
@@ -155,6 +213,7 @@ export default function ChatsPage() {
       }))
       await supabase.from('tasks').insert(taskRows)
     }
+
     setLoading(false)
   }
 
