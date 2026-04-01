@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import ReactMarkdown from 'react-markdown'
 
 export default function ChatsPage() {
   const router = useRouter()
@@ -260,7 +261,7 @@ export default function ChatsPage() {
                 ? 'bg-green-400 text-black font-medium'
                 : 'bg-gray-900 text-white border border-gray-800'
             }`}>
-              {msg.content}
+              <ReactMarkdown>{msg.content}</ReactMarkdown>
             </div>
           </div>
         ))}
