@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
+import MisterCash from '../components/MisterCash'
 
 export default function Dashboard() {
   const [user, setUser] = useState(null)
@@ -201,9 +202,8 @@ export default function Dashboard() {
         </div>
 
         <div className="flex flex-col items-center py-6 border-b border-gray-800">
-          <div className="relative w-24 h-24 flex items-center justify-center">
-            <div className="text-6xl animate-bounce">💵</div>
-            <div className="absolute bottom-0 right-0 text-2xl">⌚</div>
+          <div className="flex items-center justify-center">
+            <MisterCash expression="neutral" size={100} />
           </div>
           <div
             className="mt-3 bg-gray-800 text-green-400 text-xs px-3 py-2 rounded-lg text-center border border-gray-700"
