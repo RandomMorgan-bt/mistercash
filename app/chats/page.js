@@ -19,6 +19,8 @@ function ChatsContent() {
   const [chatId, setChatId] = useState(null)
   const [accessBlocked, setAccessBlocked] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [view, setView] = useState('list') // 'list' or 'chat'
+  const [allChats, setAllChats] = useState([])
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
@@ -59,6 +61,13 @@ function ChatsContent() {
         }
       }
 
+      const { data: chats } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+      setAllChats(chats || [])
+
       if (chatIdFromUrl) {
         const { data: specificChat } = await supabase
           .from('chats')
@@ -70,6 +79,7 @@ function ChatsContent() {
           setChatId(specificChat.id)
           const loaded = JSON.parse(specificChat.messages)
           setMessages(loaded)
+          setView('chat')
           const last = loaded[loaded.length - 1]
           if (last?.role === 'user' && last?.content?.startsWith('[TASK SUBMISSION')) {
             triggerEvaluation(loaded, profile, specificChat.id, user.id)
@@ -78,39 +88,8 @@ function ChatsContent() {
         }
       }
 
-      const { data: existingChats } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-
-      if (existingChats && existingChats.length > 0) {
-        const chat = existingChats[0]
-        setChatId(chat.id)
-        const loaded = JSON.parse(chat.messages)
-        setMessages(loaded)
-        const last = loaded[loaded.length - 1]
-        if (last?.role === 'user' && last?.content?.startsWith('[TASK SUBMISSION')) {
-          triggerEvaluation(loaded, profile, chat.id, user.id)
-        }
-      } else {
-        const initialMessages = [{
-          role: 'assistant',
-          content: `What's up. I'm Mister Cash. 💵⌚\n\nYou told me you want to become: **${profile?.goal || 'something great'}**.\n\nLet's get to work. Tell me where you're at right now with this goal — what have you already tried or learned?`,
-        }]
-        const { data: newChat } = await supabase
-          .from('chats')
-          .insert({
-            user_id: user.id,
-            title: 'Chat 1',
-            messages: JSON.stringify(initialMessages),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-          .single()
-        if (newChat) { setChatId(newChat.id); setMessages(initialMessages) }
-      }
+      // No ?id= param — show the list
+      setView('list')
     }
     getUser()
   }, [chatIdFromUrl])
@@ -199,6 +178,14 @@ function ChatsContent() {
       .eq('id', chatId)
   }
 
+  const openChat = async (chat) => {
+    setChatId(chat.id)
+    const loaded = JSON.parse(chat.messages)
+    setMessages(loaded)
+    setView('chat')
+    router.push(`/chats?id=${chat.id}`)
+  }
+
   const startNewChat = async () => {
     const initialMessages = [{
       role: 'assistant',
@@ -215,8 +202,10 @@ function ChatsContent() {
       .select()
       .single()
     if (newChat) {
+      setAllChats(prev => [newChat, ...prev])
       setChatId(newChat.id)
       setMessages(initialMessages)
+      setView('chat')
       router.push(`/chats?id=${newChat.id}`)
     }
   }
@@ -284,6 +273,7 @@ function ChatsContent() {
     }
   }
 
+  // ACCESS BLOCKED
   if (accessBlocked) {
     return (
       <div style={{
@@ -308,6 +298,74 @@ function ChatsContent() {
     )
   }
 
+  // CHATS LIST VIEW
+  if (view === 'list') {
+    return (
+      <div style={{ minHeight: '100vh', background: '#000', color: '#fff' }}>
+        <div
+          className="border-b border-gray-800"
+          style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}
+        >
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{
+              background: '#1f2937', border: '1px solid #374151', borderRadius: '8px',
+              color: '#4ade80', cursor: 'pointer', padding: '8px 14px',
+              fontSize: '13px', fontWeight: 'bold', flexShrink: 0,
+            }}
+          >
+            ← Dashboard
+          </button>
+          <h1 className="font-bold text-white tracking-widest" style={{ fontSize: '16px', flex: 1 }}>
+            CHATS
+          </h1>
+          <button
+            onClick={startNewChat}
+            className="bg-green-400 text-black font-bold tracking-widest hover:bg-green-300 transition-all"
+            style={{ fontSize: '12px', padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+          >
+            + NEW CHAT
+          </button>
+        </div>
+
+        <div style={{ padding: isMobile ? '16px' : '32px', maxWidth: '720px' }}>
+          {allChats.length === 0 ? (
+            <div className="border border-gray-800 p-8 text-center">
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>💵</div>
+              <p className="text-gray-400 text-sm mb-6">No chats yet. Start your first session with Mister Cash.</p>
+              <button
+                onClick={startNewChat}
+                className="bg-green-400 text-black font-bold px-6 py-3 text-sm tracking-widest hover:bg-green-300 transition-all"
+              >
+                START LEARNING
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {allChats.map(chat => (
+                <div
+                  key={chat.id}
+                  onClick={() => openChat(chat)}
+                  className="border border-gray-800 hover:border-green-400 transition-all cursor-pointer"
+                  style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <p className="text-white font-bold text-sm" style={{ marginBottom: '4px' }}>{chat.title}</p>
+                    <p className="text-gray-500 text-xs">
+                      {new Date(chat.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <span className="text-green-400" style={{ fontSize: '18px', flexShrink: 0 }}>→</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // CHAT VIEW
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#000', color: '#fff' }}>
 
@@ -317,15 +375,14 @@ function ChatsContent() {
         style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}
       >
         <button
-          onClick={() => router.push('/dashboard')}
+          onClick={() => { setView('list'); router.push('/chats') }}
           style={{
             background: '#1f2937', border: '1px solid #374151', borderRadius: '8px',
             color: '#4ade80', cursor: 'pointer', padding: '8px 14px',
-            display: 'flex', alignItems: 'center', gap: '6px',
             fontSize: '13px', fontWeight: 'bold', flexShrink: 0,
           }}
         >
-          ← Dashboard
+          ← Chats
         </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '20px' }}>💵⌚</span>
