@@ -24,13 +24,18 @@ export default function Onboarding() {
 
   async function finishOnboarding() {
     setLoading(true)
-    await supabase.from('profiles').upsert({
-      user_id: user.id,
-      onboarding_completed: true,
-      goal,
-      experience_level: experienceLevel || null,
-      learning_style: learningStyle.length > 0 ? learningStyle.join(', ') : null,
-    }, { onConflict: 'user_id'})
+    await supabase.from('profiles').upsert(
+      {
+        user_id: user.id,
+        display_name: user.user_metadata?.display_name || null,
+        onboarding_completed: true,
+        trial_started_at: new Date().toISOString(),
+        goal,
+        experience_level: experienceLevel || null,
+        learning_style: learningStyle.length > 0 ? learningStyle.join(', ') : null,
+      },
+      { onConflict: 'user_id' }
+    )
     router.push('/dashboard')
   }
 
