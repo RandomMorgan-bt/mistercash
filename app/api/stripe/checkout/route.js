@@ -25,7 +25,7 @@ export async function POST(request) {
     const daysSinceTrial = trialStart
       ? (new Date() - trialStart) / (1000 * 60 * 60 * 24)
       : 0
-    const trialAlreadyUsed = daysSinceTrial > 14
+    const trialAlreadyUsed = true
 
     const sessionConfig = {
       mode: 'subscription',
