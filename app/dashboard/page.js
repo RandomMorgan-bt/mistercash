@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState([])
   const [subscription, setSubscription] = useState(null)
   const [subscribing, setSubscribing] = useState(false)
+  const [accessBlocked, setAccessBlocked] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -24,13 +25,35 @@ export default function Dashboard() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('onboarding_completed')
+        .select('*')
         .eq('user_id', user.id)
         .single()
 
       if (!profile || !profile.onboarding_completed) {
         router.push('/onboarding')
         return
+      }
+
+      const { data: userSub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single()
+      setSubscription(userSub)
+
+      // Check access
+      if (!profile.is_gifted) {
+        const hasActiveSubscription = userSub && (userSub.status === 'active' || userSub.status === 'trialing')
+        if (!hasActiveSubscription) {
+          const trialStart = profile.trial_started_at
+            ? new Date(profile.trial_started_at)
+            : new Date(profile.created_at)
+          const daysSinceTrial = (new Date() - trialStart) / (1000 * 60 * 60 * 24)
+          if (daysSinceTrial > 14) {
+            setAccessBlocked(true)
+            setActiveSection('subscription')
+          }
+        }
       }
 
       const { data: userChats } = await supabase
@@ -46,13 +69,6 @@ export default function Dashboard() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: true })
       setTasks((userTasks || []).map(t => ({ ...t, showSubmit: false })))
-
-      const { data: userSub } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-      setSubscription(userSub)
     }
     getUser()
   }, [])
@@ -128,6 +144,16 @@ export default function Dashboard() {
     },
   ]
 
+  const handleNavClick = (itemId) => {
+    if (accessBlocked && itemId !== 'subscription') return
+    if (itemId === 'chats') {
+      if (accessBlocked) return
+      router.push('/chats')
+    } else {
+      setActiveSection(itemId)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black flex">
 
@@ -148,7 +174,9 @@ export default function Dashboard() {
             <div className="absolute bottom-0 right-0 text-2xl">⌚</div>
           </div>
           <div className="mt-3 bg-gray-800 text-green-400 text-xs px-3 py-2 rounded-lg max-w-40 text-center border border-gray-700">
-            Ready to learn something real today?
+            {accessBlocked
+              ? 'Your trial has ended. Subscribe to continue.'
+              : 'Ready to learn something real today?'}
           </div>
         </div>
 
@@ -157,15 +185,20 @@ export default function Dashboard() {
           {navItems.map(item => (
             <button
               key={item.id}
-              onClick={() => item.id === 'chats' ? router.push('/chats') : setActiveSection(item.id)}
+              onClick={() => handleNavClick(item.id)}
               className={`w-full flex items-center gap-3 px-6 py-3 text-sm text-left transition-all ${
                 activeSection === item.id
                   ? 'bg-green-400 text-black font-bold'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  : accessBlocked && item.id !== 'subscription'
+                    ? 'text-gray-700 cursor-not-allowed'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
               }`}
             >
               <span>{item.icon}</span>
               <span className="tracking-wide">{item.label}</span>
+              {accessBlocked && item.id !== 'subscription' && (
+                <span className="ml-auto text-gray-700 text-xs">🔒</span>
+              )}
             </button>
           ))}
         </nav>
@@ -200,6 +233,21 @@ export default function Dashboard() {
             </span>
           </p>
         </div>
+
+        {/* Access blocked banner */}
+        {accessBlocked && activeSection !== 'subscription' && (
+          <div className="bg-gray-950 border-b border-green-400 px-8 py-4 flex items-center justify-between">
+            <p className="text-green-400 text-sm font-bold tracking-wide">
+              Your 14-day free trial has ended.
+            </p>
+            <button
+              onClick={() => setActiveSection('subscription')}
+              className="bg-green-400 text-black font-bold text-xs px-4 py-2 tracking-widest hover:bg-green-300 transition-all"
+            >
+              SUBSCRIBE TO CONTINUE
+            </button>
+          </div>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 p-8">
@@ -445,24 +493,24 @@ export default function Dashboard() {
             <div>
               <p className="text-gray-500 text-sm mb-2 tracking-wide">Manage your plan</p>
 
-              {subscription?.status === 'active' ? (
+              {accessBlocked && (
+                <div className="border border-green-400 p-6 mb-8 bg-gray-950">
+                  <p className="text-green-400 font-bold tracking-widest mb-1">YOUR FREE TRIAL HAS ENDED</p>
+                  <p className="text-gray-400 text-sm">Your progress, tasks and history are all saved. Subscribe to pick up where you left off.</p>
+                </div>
+              )}
+
+              {!accessBlocked && subscription?.status === 'active' ? (
                 <div className="border border-green-400 p-6 mb-8">
                   <p className="text-green-400 font-bold tracking-widest mb-1">ACTIVE SUBSCRIPTION</p>
                   <p className="text-gray-400 text-sm">
                     Your plan renews on {new Date(subscription.current_period_end).toLocaleDateString()}.
                   </p>
                 </div>
-              ) : subscription?.status === 'trialing' ? (
-                <div className="border border-green-400 p-6 mb-8">
-                  <p className="text-green-400 font-bold tracking-widest mb-1">FREE TRIAL ACTIVE</p>
-                  <p className="text-gray-400 text-sm">
-                    Your trial ends on {new Date(subscription.current_period_end).toLocaleDateString()}. Pick a plan below to continue after your trial.
-                  </p>
-                </div>
-              ) : (
+              ) : !accessBlocked && (
                 <div className="border border-gray-800 p-6 mb-8">
-                  <p className="text-green-400 font-bold tracking-widest mb-1">14-DAY FREE TRIAL</p>
-                  <p className="text-gray-400 text-sm">Full access, no credit card required until trial ends. Pick a plan to get started.</p>
+                  <p className="text-green-400 font-bold tracking-widest mb-1">14-DAY FREE TRIAL ACTIVE</p>
+                  <p className="text-gray-400 text-sm">Full access. No credit card required until trial ends.</p>
                 </div>
               )}
 
