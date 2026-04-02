@@ -13,16 +13,21 @@ export default function Dashboard() {
   const [subscribing, setSubscribing] = useState(false)
   const [accessBlocked, setAccessBlocked] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const sidebarRef = useRef(null)
   const router = useRouter()
 
   useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/auth')
-        return
-      }
+      if (!user) { router.push('/auth'); return }
       setUser(user)
 
       const { data: profile } = await supabase
@@ -31,10 +36,7 @@ export default function Dashboard() {
         .eq('user_id', user.id)
         .single()
 
-      if (!profile || !profile.onboarding_completed) {
-        router.push('/onboarding')
-        return
-      }
+      if (!profile || !profile.onboarding_completed) { router.push('/onboarding'); return }
 
       const { data: userSub } = await supabase
         .from('subscriptions')
@@ -44,16 +46,13 @@ export default function Dashboard() {
       setSubscription(userSub)
 
       if (!profile.is_gifted) {
-        const hasActiveSubscription = userSub && (userSub.status === 'active' || userSub.status === 'trialing')
-        if (!hasActiveSubscription) {
+        const hasActiveSub = userSub && (userSub.status === 'active' || userSub.status === 'trialing')
+        if (!hasActiveSub) {
           const trialStart = profile.trial_started_at
             ? new Date(profile.trial_started_at)
             : new Date(profile.created_at)
-          const daysSinceTrial = (new Date() - trialStart) / (1000 * 60 * 60 * 24)
-          if (daysSinceTrial > 14) {
-            setAccessBlocked(true)
-            setActiveSection('subscription')
-          }
+          const days = (new Date() - trialStart) / (1000 * 60 * 60 * 24)
+          if (days > 14) { setAccessBlocked(true); setActiveSection('subscription') }
         }
       }
 
@@ -74,30 +73,24 @@ export default function Dashboard() {
     getUser()
   }, [])
 
-  // Close sidebar when clicking outside on mobile
   useEffect(() => {
-    const handleClickOutside = (e) => {
+    const handle = (e) => {
       if (sidebarOpen && sidebarRef.current && !sidebarRef.current.contains(e.target)) {
         setSidebarOpen(false)
       }
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('touchstart', handleClickOutside)
+    document.addEventListener('mousedown', handle)
+    document.addEventListener('touchstart', handle)
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('touchstart', handleClickOutside)
+      document.removeEventListener('mousedown', handle)
+      document.removeEventListener('touchstart', handle)
     }
   }, [sidebarOpen])
 
-  // Prevent body scroll when sidebar is open on mobile
   useEffect(() => {
-    if (sidebarOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
+    document.body.style.overflow = (sidebarOpen && isMobile) ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [sidebarOpen])
+  }, [sidebarOpen, isMobile])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -108,21 +101,15 @@ export default function Dashboard() {
     if (!user) return
     setSubscribing(true)
     try {
-      const response = await fetch('/api/stripe/checkout', {
+      const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priceId,
-          userId: user.id,
-          userEmail: user.email,
-        }),
+        body: JSON.stringify({ priceId, userId: user.id, userEmail: user.email }),
       })
-      const data = await response.json()
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch (error) {
-      console.error('Subscription error:', error)
+      const data = await res.json()
+      if (data.url) window.location.href = data.url
+    } catch (e) {
+      console.error(e)
     }
     setSubscribing(false)
   }
@@ -181,115 +168,128 @@ export default function Dashboard() {
     setSidebarOpen(false)
   }
 
-  const SidebarContent = () => (
-    <>
-      <div className="p-6 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-white tracking-widest">
-          MISTER <span className="text-green-400">CASH</span>
-        </h1>
-      </div>
-
-      <div className="flex flex-col items-center py-6 border-b border-gray-800">
-        <div className="relative w-24 h-24 flex items-center justify-center">
-          <div className="text-6xl animate-bounce">💵</div>
-          <div className="absolute bottom-0 right-0 text-2xl">⌚</div>
-        </div>
-        <div className="mt-3 bg-gray-800 text-green-400 text-xs px-3 py-2 rounded-lg max-w-40 text-center border border-gray-700">
-          {accessBlocked
-            ? 'Your trial has ended. Subscribe to continue.'
-            : 'Ready to learn something real today?'}
-        </div>
-      </div>
-
-      <nav className="flex-1 py-4 overflow-y-auto">
-        {navItems.map(item => (
-          <button
-            key={item.id}
-            onClick={() => handleNavClick(item.id)}
-            className={`w-full flex items-center gap-3 px-6 py-3 text-sm text-left transition-all ${
-              activeSection === item.id
-                ? 'bg-green-400 text-black font-bold'
-                : accessBlocked && item.id !== 'subscription'
-                  ? 'text-gray-700 cursor-not-allowed'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            }`}
-          >
-            <span>{item.icon}</span>
-            <span className="tracking-wide">{item.label}</span>
-            {accessBlocked && item.id !== 'subscription' && (
-              <span className="ml-auto text-gray-700 text-xs">🔒</span>
-            )}
-          </button>
-        ))}
-      </nav>
-
-      <div className="p-4 border-t border-gray-800">
-        <p className="text-gray-500 text-xs mb-2 truncate">
-          {user?.user_metadata?.display_name || user?.email}
-        </p>
-        <button
-          onClick={handleLogout}
-          className="w-full text-xs text-gray-500 hover:text-red-400 transition-all text-left tracking-wide"
-        >
-          → Log out
-        </button>
-      </div>
-    </>
-  )
+  const sidebarStyle = isMobile
+    ? {
+        position: 'fixed', top: 0, left: 0, height: '100%', width: '280px',
+        zIndex: 50, transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.3s ease',
+      }
+    : {
+        position: 'relative', width: '256px', flexShrink: 0,
+      }
 
   return (
-    <div className="min-h-screen bg-black flex">
+    <div style={{ minHeight: '100vh', background: '#000', display: 'flex' }}>
 
-      {/* Mobile overlay backdrop */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/70 z-20 md:hidden" />
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 40 }}
+        />
       )}
 
-      {/* Sidebar — fixed on desktop, slide-in overlay on mobile */}
+      {/* SIDEBAR */}
       <aside
         ref={sidebarRef}
-        className={`
-          fixed top-0 left-0 h-full w-72 bg-gray-950 border-r border-gray-800 flex flex-col z-30
-          transition-transform duration-300 ease-in-out
-          md:translate-x-0 md:static md:w-64 md:z-auto md:flex
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}
+        style={sidebarStyle}
+        className="bg-gray-950 border-r border-gray-800 flex flex-col"
       >
-        <SidebarContent />
+        <div className="p-6 border-b border-gray-800">
+          <h1 className="text-2xl font-bold text-white tracking-widest">
+            MISTER <span className="text-green-400">CASH</span>
+          </h1>
+        </div>
+
+        <div className="flex flex-col items-center py-6 border-b border-gray-800">
+          <div className="relative w-24 h-24 flex items-center justify-center">
+            <div className="text-6xl animate-bounce">💵</div>
+            <div className="absolute bottom-0 right-0 text-2xl">⌚</div>
+          </div>
+          <div
+            className="mt-3 bg-gray-800 text-green-400 text-xs px-3 py-2 rounded-lg text-center border border-gray-700"
+            style={{ maxWidth: '200px' }}
+          >
+            {accessBlocked
+              ? 'Your trial has ended. Subscribe to continue.'
+              : 'Ready to learn something real today?'}
+          </div>
+        </div>
+
+        <nav style={{ flex: 1, paddingTop: '16px', paddingBottom: '16px', overflowY: 'auto' }}>
+          {navItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              className={`w-full flex items-center gap-3 px-6 py-3 text-sm text-left transition-all ${
+                activeSection === item.id
+                  ? 'bg-green-400 text-black font-bold'
+                  : accessBlocked && item.id !== 'subscription'
+                    ? 'text-gray-700 cursor-not-allowed'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              <span>{item.icon}</span>
+              <span className="tracking-wide">{item.label}</span>
+              {accessBlocked && item.id !== 'subscription' && (
+                <span className="ml-auto text-gray-700 text-xs">🔒</span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-gray-800">
+          <p className="text-gray-500 text-xs mb-2 truncate">
+            {user?.user_metadata?.display_name || user?.email}
+          </p>
+          <button
+            onClick={handleLogout}
+            className="w-full text-xs text-gray-500 hover:text-red-400 transition-all text-left tracking-wide"
+          >
+            → Log out
+          </button>
+        </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      {/* MAIN CONTENT */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
 
         {/* Top bar */}
-        <div className="border-b border-gray-800 px-4 md:px-8 py-4 flex items-center justify-between gap-4">
-
-          {/* Hamburger — mobile only */}
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="md:hidden text-gray-400 hover:text-green-400 transition-all p-1"
-            aria-label="Open menu"
-          >
-            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-              <rect y="3" width="22" height="2" rx="1" fill="currentColor" />
-              <rect y="10" width="22" height="2" rx="1" fill="currentColor" />
-              <rect y="17" width="22" height="2" rx="1" fill="currentColor" />
-            </svg>
-          </button>
-
-          <h2 className="text-white font-bold tracking-widest text-base md:text-lg uppercase flex-1 md:flex-none">
+        <div className="border-b border-gray-800 px-4 py-4 flex items-center gap-3">
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#9ca3af', flexShrink: 0 }}
+              aria-label="Open menu"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <rect y="4" width="24" height="2" rx="1" fill="currentColor" />
+                <rect y="11" width="24" height="2" rx="1" fill="currentColor" />
+                <rect y="18" width="24" height="2" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+          )}
+          <h2 className="text-white font-bold tracking-widest text-lg uppercase" style={{ flex: 1 }}>
             {navItems.find(i => i.id === activeSection)?.label}
           </h2>
-          <p className="text-gray-500 text-sm hidden sm:block">
-            Welcome back,{' '}
-            <span className="text-green-400">
-              {user?.user_metadata?.display_name || 'user'}
-            </span>
-          </p>
+          {!isMobile && (
+            <p className="text-gray-500 text-sm">
+              Welcome back,{' '}
+              <span className="text-green-400">{user?.user_metadata?.display_name || 'user'}</span>
+            </p>
+          )}
         </div>
 
         {accessBlocked && activeSection !== 'subscription' && (
-          <div className="bg-gray-950 border-b border-green-400 px-4 md:px-8 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0 sm:justify-between">
+          <div
+            className="bg-gray-950 border-b border-green-400 px-4 py-4"
+            style={{
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              alignItems: isMobile ? 'flex-start' : 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
             <p className="text-green-400 text-sm font-bold tracking-wide">
               Your 14-day free trial has ended.
             </p>
@@ -302,7 +302,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="flex-1 p-4 md:p-8">
+        <div style={{ flex: 1, padding: isMobile ? '16px' : '32px', overflowY: 'auto' }}>
 
           {/* CHATS */}
           {activeSection === 'chats' && (
@@ -361,9 +361,7 @@ export default function Dashboard() {
                     <div
                       key={task.id}
                       className={`border p-4 transition-all ${
-                        task.completed
-                          ? 'border-gray-800 opacity-50'
-                          : 'border-gray-700 hover:border-green-400'
+                        task.completed ? 'border-gray-800 opacity-50' : 'border-gray-700 hover:border-green-400'
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -371,13 +369,8 @@ export default function Dashboard() {
                         {task.type === 'knowledge' ? (
                           <button
                             onClick={async () => {
-                              await supabase
-                                .from('tasks')
-                                .update({ completed: !task.completed })
-                                .eq('id', task.id)
-                              setTasks(tasks.map(t =>
-                                t.id === task.id ? { ...t, completed: !t.completed } : t
-                              ))
+                              await supabase.from('tasks').update({ completed: !task.completed }).eq('id', task.id)
+                              setTasks(tasks.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t))
                             }}
                             className={`mt-1 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-all ${
                               task.completed
@@ -390,9 +383,7 @@ export default function Dashboard() {
                         ) : (
                           <button
                             onClick={() =>
-                              setTasks(tasks.map(t =>
-                                t.id === task.id ? { ...t, showSubmit: !t.showSubmit } : t
-                              ))
+                              setTasks(tasks.map(t => t.id === task.id ? { ...t, showSubmit: !t.showSubmit } : t))
                             }
                             className="mt-1 text-xs bg-green-400 text-black font-bold px-3 py-1 flex-shrink-0 hover:bg-green-300 transition-all"
                           >
@@ -400,17 +391,13 @@ export default function Dashboard() {
                           </button>
                         )}
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            <p className={`text-sm font-bold ${
-                              task.completed ? 'line-through text-gray-600' : 'text-white'
-                            }`}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <p className={`text-sm font-bold ${task.completed ? 'line-through text-gray-600' : 'text-white'}`}>
                               {task.title}
                             </p>
                             <span className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${
-                              task.type === 'knowledge'
-                                ? 'bg-blue-900 text-blue-300'
-                                : 'bg-purple-900 text-purple-300'
+                              task.type === 'knowledge' ? 'bg-blue-900 text-blue-300' : 'bg-purple-900 text-purple-300'
                             }`}>
                               {task.type}
                             </span>
@@ -420,7 +407,7 @@ export default function Dashboard() {
                           {task.type === 'practice' && task.showSubmit && (
                             <div className="mt-3 border-t border-gray-800 pt-3">
                               <p className="text-gray-400 text-xs mb-2">
-                                Paste a link, describe what you built, or explain what you did. Mister Cash will evaluate it.
+                                Paste a link, describe what you built, or explain what you did.
                               </p>
                               <textarea
                                 id={`submit-${task.id}`}
@@ -439,15 +426,14 @@ export default function Dashboard() {
                                     .select('messages')
                                     .eq('id', task.chat_id)
                                     .single()
-                                  const existingMessages = JSON.parse(chatData.data.messages || '[]')
-                                  const newMessage = {
-                                    role: 'user',
-                                    content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}`,
-                                  }
+                                  const existing = JSON.parse(chatData.data.messages || '[]')
                                   await supabase
                                     .from('chats')
                                     .update({
-                                      messages: JSON.stringify([...existingMessages, newMessage]),
+                                      messages: JSON.stringify([
+                                        ...existing,
+                                        { role: 'user', content: `[TASK SUBMISSION - ${task.title}]\n\n${submission}` },
+                                      ]),
                                       updated_at: new Date().toISOString(),
                                     })
                                     .eq('id', task.chat_id)
@@ -566,25 +552,27 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-4 max-w-3xl">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '720px' }}>
                 {plans.map(plan => (
                   <div
                     key={plan.id}
-                    className={`border p-5 md:p-6 transition-all ${
-                      plan.highlight
-                        ? 'border-green-400 bg-gray-950'
-                        : 'border-gray-800 hover:border-gray-600'
+                    className={`border p-5 transition-all ${
+                      plan.highlight ? 'border-green-400 bg-gray-950' : 'border-gray-800 hover:border-gray-600'
                     }`}
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      alignItems: isMobile ? 'flex-start' : 'center',
+                      justifyContent: 'space-between',
+                      gap: '16px',
+                    }}>
                       <div>
-                        <div className="flex flex-wrap items-center gap-3 mb-1">
+                        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
                           <p className="text-white font-bold tracking-wide">{plan.name}</p>
                           {plan.savings && (
                             <span className={`text-xs px-2 py-0.5 font-bold tracking-wide ${
-                              plan.highlight
-                                ? 'bg-green-400 text-black'
-                                : 'bg-gray-800 text-green-400'
+                              plan.highlight ? 'bg-green-400 text-black' : 'bg-gray-800 text-green-400'
                             }`}>
                               {plan.savings}
                             </span>
@@ -592,7 +580,13 @@ export default function Dashboard() {
                         </div>
                         <p className="text-gray-500 text-xs">{plan.period}</p>
                       </div>
-                      <div className="flex items-center justify-between sm:justify-end gap-4">
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '16px',
+                        width: isMobile ? '100%' : 'auto',
+                      }}>
                         <p className="text-white font-bold text-xl">{plan.price}</p>
                         <button
                           onClick={() => handleSubscribe(plan.priceId)}
@@ -603,11 +597,7 @@ export default function Dashboard() {
                               : 'border border-green-400 text-green-400 hover:bg-green-400 hover:text-black'
                           }`}
                         >
-                          {subscribing
-                            ? 'LOADING...'
-                            : subscription?.status === 'active'
-                              ? 'CURRENT'
-                              : 'GET STARTED'}
+                          {subscribing ? 'LOADING...' : subscription?.status === 'active' ? 'CURRENT' : 'GET STARTED'}
                         </button>
                       </div>
                     </div>
