@@ -17,7 +17,9 @@ function ChatsContent() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [chatId, setChatId] = useState(null)
+  const [accessBlocked, setAccessBlocked] = useState(false)
   const bottomRef = useRef(null)
+  const textareaRef = useRef(null)
 
   useEffect(() => {
     const getUser = async () => {
@@ -35,6 +37,28 @@ function ChatsContent() {
         .single()
 
       setProfile(profile)
+
+      if (!profile?.is_gifted) {
+        const { data: userSub } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', user.id)
+          .single()
+
+        const hasActiveSubscription = userSub &&
+          (userSub.status === 'active' || userSub.status === 'trialing')
+
+        if (!hasActiveSubscription) {
+          const trialStart = profile?.trial_started_at
+            ? new Date(profile.trial_started_at)
+            : new Date(profile?.created_at)
+          const daysSinceTrial = (new Date() - trialStart) / (1000 * 60 * 60 * 24)
+          if (daysSinceTrial > 14) {
+            setAccessBlocked(true)
+            return
+          }
+        }
+      }
 
       if (chatIdFromUrl) {
         const { data: specificChat } = await supabase
@@ -104,9 +128,18 @@ function ChatsContent() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Auto-resize textarea on mobile
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height =
+        Math.min(textareaRef.current.scrollHeight, 120) + 'px'
+    }
+  }, [input])
+
   const updateMemory = async (userId, conversationMessages, assistantResponse) => {
     try {
-      const memoryResponse = await fetch('/api/memory', {
+      await fetch('/api/memory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,7 +148,6 @@ function ChatsContent() {
           assistantResponse,
         }),
       })
-      await memoryResponse.json()
     } catch (e) {
       console.error('Memory update failed:', e)
     }
@@ -148,11 +180,9 @@ function ChatsContent() {
       })
       .eq('id', currentChatId)
 
-    // Update memory
     await updateMemory(userId, finalMessages, data.message)
 
-    // Handle memory deletion if requested
-    if (data.deleteMemory) {
+    if (data.deleteMemory && data.updatedMemory !== undefined) {
       await supabase
         .from('memories')
         .update({ content: data.updatedMemory, updated_at: new Date().toISOString() })
@@ -215,11 +245,12 @@ function ChatsContent() {
     if (newChat) {
       setChatId(newChat.id)
       setMessages(initialMessages)
+      router.push(`/chats?id=${newChat.id}`)
     }
   }
 
   const sendMessage = async () => {
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || accessBlocked) return
 
     const userMessage = { role: 'user', content: input }
     const updatedMessages = [...messages, userMessage]
@@ -252,11 +283,8 @@ function ChatsContent() {
 
     setMessages(finalMessages)
     await saveMessages(finalMessages)
-
-    // Update memory after every response
     await updateMemory(user?.id, finalMessages, data.message)
 
-    // Handle memory deletion if requested
     if (data.deleteMemory && data.updatedMemory !== undefined) {
       await supabase
         .from('memories')
@@ -281,44 +309,65 @@ function ChatsContent() {
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // On mobile, Enter adds newline. On desktop, Enter sends.
+    if (e.key === 'Enter' && !e.shiftKey && window.innerWidth >= 768) {
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  if (accessBlocked) {
+    return (
+      <div className="flex flex-col h-screen bg-black text-white items-center justify-center p-8">
+        <div className="text-6xl mb-6">💵⌚</div>
+        <h1 className="text-2xl font-bold text-green-400 tracking-widest mb-4 text-center">
+          YOUR TRIAL HAS ENDED
+        </h1>
+        <p className="text-gray-400 text-center mb-8 max-w-md">
+          Your progress, tasks and history are all saved. Subscribe to pick up exactly where you left off.
+        </p>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="bg-green-400 text-black font-bold px-8 py-4 tracking-widest hover:bg-green-300 transition-all"
+        >
+          SEE PLANS →
+        </button>
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-col h-screen bg-black text-white">
 
       {/* Header */}
-      <div className="border-b border-gray-800 px-6 py-4 flex items-center gap-3">
+      <div className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 flex-shrink-0">
         <button
           onClick={() => router.push('/dashboard')}
-          className="text-gray-500 hover:text-green-400 mr-2 text-lg"
+          className="text-gray-500 hover:text-green-400 transition-all text-lg p-1 -ml-1"
         >
           ←
         </button>
-        <span className="text-2xl">💵⌚</span>
-        <div>
-          <h1 className="font-bold text-green-400 tracking-widest text-sm">MISTER CASH</h1>
-          <p className="text-gray-500 text-xs">Your AI mentor</p>
+        <span className="text-xl md:text-2xl">💵⌚</span>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-bold text-green-400 tracking-widest text-xs md:text-sm">MISTER CASH</h1>
+          <p className="text-gray-500 text-xs hidden sm:block">Your AI mentor</p>
         </div>
         <button
           onClick={startNewChat}
-          className="ml-auto text-xs text-gray-500 hover:text-green-400 border border-gray-700 hover:border-green-400 px-3 py-1 rounded-lg transition-all"
+          className="text-xs text-gray-500 hover:text-green-400 border border-gray-700 hover:border-green-400 px-3 py-1.5 rounded-lg transition-all flex-shrink-0"
         >
-          + New Chat
+          + New
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.role === 'assistant' && (
-              <span className="text-xl mr-3 mt-1">💵</span>
+              <span className="text-lg md:text-xl mr-2 mt-1 flex-shrink-0">💵</span>
             )}
-            <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed ${
+            <div className={`max-w-[85%] md:max-w-[75%] px-3 md:px-4 py-2.5 md:py-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed ${
               msg.role === 'user'
                 ? 'bg-green-400 text-black font-medium'
                 : 'bg-gray-900 text-white border border-gray-800'
@@ -330,8 +379,8 @@ function ChatsContent() {
 
         {loading && (
           <div className="flex justify-start">
-            <span className="text-xl mr-3">💵</span>
-            <div className="bg-gray-900 border border-gray-800 px-4 py-3 rounded-2xl text-sm text-gray-400">
+            <span className="text-lg md:text-xl mr-2 flex-shrink-0">💵</span>
+            <div className="bg-gray-900 border border-gray-800 px-3 md:px-4 py-2.5 md:py-3 rounded-2xl text-sm text-gray-400">
               Thinking...
             </div>
           </div>
@@ -341,25 +390,30 @@ function ChatsContent() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-800 px-6 py-4">
-        <div className="flex gap-3">
+      <div className="border-t border-gray-800 px-3 md:px-6 py-3 md:py-4 flex-shrink-0">
+        <div className="flex gap-2 md:gap-3 items-end">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Talk to Mister Cash..."
             rows={1}
-            className="flex-1 bg-gray-900 border border-gray-700 focus:border-green-400 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 resize-none outline-none"
+            className="flex-1 bg-gray-900 border border-gray-700 focus:border-green-400 rounded-xl px-3 md:px-4 py-2.5 md:py-3 text-sm text-white placeholder-gray-500 resize-none outline-none"
+            style={{ minHeight: '44px', maxHeight: '120px' }}
           />
           <button
             onClick={sendMessage}
             disabled={loading || !input.trim()}
-            className="bg-green-400 text-black font-bold tracking-widest text-xs px-5 rounded-xl disabled:opacity-40"
+            className="bg-green-400 text-black font-bold tracking-widest text-xs px-4 md:px-5 rounded-xl disabled:opacity-40 flex-shrink-0"
+            style={{ height: '44px' }}
           >
             SEND
           </button>
         </div>
-        <p className="text-gray-600 text-xs mt-2">Press Enter to send</p>
+        <p className="text-gray-600 text-xs mt-1.5 hidden md:block">
+          Press Enter to send · Shift+Enter for new line
+        </p>
       </div>
 
     </div>
